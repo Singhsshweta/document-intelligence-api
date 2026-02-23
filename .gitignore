@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.env/
+
+# FAISS index
+data/faiss_index/
+
+# Uploaded documents
+uploads/
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
