@@ -1,3 +1,4 @@
+# frontend/app.py
 from nicegui import ui
 import requests
 import asyncio
@@ -92,8 +93,11 @@ async def upload_file(e):
     f = e.file
 
     try:
+        if not f.name.endswith((".pdf", ".xls", ".xlsx")):
+            ui.notify("Only PDF/Excel files allowed", type="warning")
+            return
 
-        content = await f.read()   # <-- important fix
+        content = await f.read()
 
         response = await asyncio.to_thread(
             requests.post,
@@ -112,7 +116,6 @@ async def upload_file(e):
                     with ui.row().classes("items-center gap-3"):
 
                         cb = ui.checkbox(value=True)
-
                         ui.label(f.name).classes("text-sm")
 
                     ui.button(
@@ -138,7 +141,7 @@ async def upload_file(e):
 
 
 # -------------------------------
-# Delete Document
+# Delete Document (UI only)
 # -------------------------------
 def delete_document(name):
 
@@ -159,7 +162,6 @@ def delete_document(name):
                 with ui.row().classes("items-center gap-3"):
 
                     cb = ui.checkbox(value=doc["checkbox"].value)
-
                     ui.label(doc["name"]).classes("text-sm")
 
                 ui.button(
@@ -191,10 +193,10 @@ def send_question():
         ui.notify("Please select at least one document", type="warning")
         return
 
-    chat_area.add(
-        ui.label(f"💬 You: {question}")
-        .style("background-color:#e0f7fa; padding:5px; border-radius:5px;")
-    )
+    # User message
+    with chat_area:
+        ui.label(f"💬 You: {question}") \
+            .style("background-color:#e0f7fa; padding:5px; border-radius:5px;")
 
     question_input.set_value("")
 
@@ -217,40 +219,35 @@ def send_question():
             answer_text = result.get("answer", "")
             sources = result.get("sources", [])
 
-            chat_area.add(
-                ui.markdown(f"🤖 Assistant: {answer_text}")
-                .style("background-color:#fff3e0; padding:5px; border-radius:5px;")
-            )
+            # Assistant response
+            with chat_area:
+                ui.markdown(f"🤖 Assistant: {answer_text}") \
+                    .style("background-color:#fff3e0; padding:5px; border-radius:5px;")
 
+            # Sources
             if sources:
 
-                chat_area.add(
-                    ui.label("Sources:")
-                    .classes("text-sm font-semibold")
-                )
+                with chat_area:
+                    ui.label("Sources:").classes("text-sm font-semibold")
 
                 for src in sources:
 
-                    snippet = src.replace("\n", " ")
+                    snippet = src["text"].replace("\n", " ")
 
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
 
-                    chat_area.add(
-                        ui.label(f"- {snippet}")
-                        .classes("text-sm text-gray-700")
-                    )
+                    with chat_area:
+                        ui.label(f"- ({src['source']}) {snippet}") \
+                            .classes("text-sm text-gray-700")
 
             chat_area.scroll_to_bottom()
 
         else:
-
             ui.notify("Error getting answer", type="negative")
 
     except Exception as ex:
-
         print(ex)
-
         ui.notify("Backend API not running", type="negative")
 
 

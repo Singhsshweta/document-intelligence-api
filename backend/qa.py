@@ -1,8 +1,8 @@
-# qa.py
 import os
 import io
 import re
-from typing import List, Dict, Any, Tuple
+import traceback
+from typing import List, Dict, Any
 
 import pandas as pd
 from PyPDF2 import PdfReader
@@ -11,10 +11,9 @@ from langchain_community.llms import Ollama
 from langchain.chains import RetrievalQA
 from langchain.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings  # local embeddings
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 
 
-# ---------- DocumentQA Class ----------
 class DocumentQA:
     def __init__(self):
         self.docs = []
@@ -24,164 +23,185 @@ class DocumentQA:
 
         self.index_path = "data/faiss_index"
 
-        # Load existing index if it exists
-        if os.path.exists(self.index_path):
-            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-            self._vectorstore = FAISS.load_local(
-                self.index_path,
-                embeddings
-            )
-            self._qa_chain = self._get_qa_chain(self._vectorstore)
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2"
+        )
 
+        # ✅ DEFAULT ROLE
+        self.default_role = "You are a helpful financial assistant."
+
+        # Load existing index
+        if os.path.exists(os.path.join(self.index_path, "index.faiss")):
+            try:
+                self._vectorstore = FAISS.load_local(
+                    self.index_path,
+                    self.embeddings,
+                    allow_dangerous_deserialization=True
+                )
+                self._qa_chain = self._get_qa_chain(self._vectorstore)
+            except Exception:
+                print("⚠️ Failed to load FAISS index")
 
     # ---------- Extraction ----------
     def _extract_text_from_pdf_bytes(self, b: bytes) -> str:
         try:
             reader = PdfReader(io.BytesIO(b))
             texts = []
+
             for page_num, page in enumerate(reader.pages, start=1):
                 txt = page.extract_text()
                 if txt:
                     texts.append(f"[page {page_num}]\n{txt}")
+
             return "\n".join(texts)
+
         except Exception:
+            traceback.print_exc()
             return ""
 
     def _extract_text_from_excel_bytes(self, b: bytes) -> str:
         try:
             sheets_text = []
+
             with io.BytesIO(b) as bio:
                 xls = pd.read_excel(bio, sheet_name=None, engine="openpyxl")
+
                 for sheet_name, df in xls.items():
                     df = df.fillna("")
                     rows = df.astype(str).values.tolist()
-                    text_rows = [" | ".join(row) for row in rows]
+
+                    text_rows = [
+                        ", ".join([
+                            f"{col}: {val}"
+                            for col, val in zip(df.columns, row)
+                        ])
+                        for row in rows
+                    ]
+
                     df_text = f"Sheet: {sheet_name}\n" + "\n".join(text_rows)
                     sheets_text.append(df_text)
+
             return "\n\n".join(sheets_text)
+
         except Exception:
+            traceback.print_exc()
             return ""
 
     # ---------- Public API ----------
     def add_file(self, filename: str, file_bytes: bytes):
-        _lower = filename.lower()
-        if _lower.endswith(".pdf"):
-            text = self._extract_text_from_pdf_bytes(file_bytes)
-            ftype = "pdf"
-        elif _lower.endswith((".xls", ".xlsx")):
-            text = self._extract_text_from_excel_bytes(file_bytes)
-            ftype = "excel"
-        else:
-            text = ""
-            ftype = "unknown"
+        try:
+            _lower = filename.lower()
 
-        text = self._clean_text(text)
-        self.docs.append({"name": filename, "text": text, "type": ftype, "size": len(text)})
-        self._split_into_passages()
-        self._build_vectorstore()
+            if _lower.endswith(".pdf"):
+                text = self._extract_text_from_pdf_bytes(file_bytes)
+                ftype = "pdf"
 
-    def get_indexed_docs(self) -> List[Dict[str, Any]]:
-        return [{"name": d['name'], "type": d['type'], "size": d['size']} for d in self.docs]
+            elif _lower.endswith((".xls", ".xlsx")):
+                text = self._extract_text_from_excel_bytes(file_bytes)
+                ftype = "excel"
 
-    # ---------- Text processing ----------
-    def _clean_text(self, text: str) -> str:
+            else:
+                raise ValueError("Unsupported file type")
+
+            text = self._clean_text(text)
+
+            if not text.strip():
+                raise ValueError("Could not extract text from file")
+
+            self.docs.append({
+                "name": filename,
+                "text": text,
+                "type": ftype,
+                "size": len(text)
+            })
+
+            self._split_into_passages()
+            self._build_vectorstore()
+
+        except Exception as e:
+            print("\n🔥 ERROR IN add_file 🔥")
+            traceback.print_exc()
+            raise e
+
+    def get_indexed_docs(self):
+        return [
+            {
+                "name": d["name"],
+                "type": d["type"],
+                "size": d["size"]
+            }
+            for d in self.docs
+        ]
+
+    # ---------- Processing ----------
+    def _clean_text(self, text: str):
         text = re.sub(r"[ \t]+", " ", text)
         text = re.sub(r"\n\s+\n", "\n\n", text)
         return text.strip()
 
     def _split_into_passages(self, max_chars: int = 1000):
-        passages = []
+        self._passages = []
+
         for d in self.docs:
             text = d["text"]
-            if "[page " in text:
-                pages = re.split(r"(\[page \d+\])", text)
-                blocks = []
-                i = 0
-                while i < len(pages):
-                    if pages[i].startswith("[page "):
-                        marker = pages[i]
-                        content = pages[i+1] if i+1 < len(pages) else ""
-                        blocks.append(marker + "\n" + content)
-                        i += 2
-                    else:
-                        if pages[i].strip():
-                            blocks.append(pages[i])
-                        i += 1
-                base_segments = blocks
-            else:
-                base_segments = [seg for seg in re.split(r"\n{2,}", text) if seg.strip()]
 
-            # split long segments into smaller chunks
-            for seg in base_segments:
-                sentences = re.split(r'(?<=[.!?])\s+', seg)
-                cur = ""
-                for s in sentences:
-                    if len(cur) + len(s) + 1 <= max_chars:
-                        cur = cur + " " + s if cur else s
-                    else:
-                        if cur:
-                            passages.append(cur.strip())
-                        cur = s
-                if cur:
-                    passages.append(cur.strip())
-        self._passages = [p for p in passages if len(p) > 20]
+            segments = re.split(r"\n{2,}", text)
 
-    # ---------- Vectorstore & QA chain ----------
+            for seg in segments:
+                if len(seg) > 20:
+                    self._passages.append({
+                        "text": seg,
+                        "source": d["name"]
+                    })
+
+    # ---------- Vectorstore ----------
     def _build_vectorstore(self):
-        if not self.docs:
-            self._vectorstore = None
-            self._qa_chain = None
-            return
+        try:
+            if not self._passages:
+                return
 
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            texts = [p["text"] for p in self._passages]
+            metadatas = [{"source": p["source"]} for p in self._passages]
 
-        texts = []
-        metadatas = []
+            self._vectorstore = FAISS.from_texts(
+                texts,
+                embedding=self.embeddings,
+                metadatas=metadatas
+            )
 
-        for d in self.docs:
-            passages = self._passages
-            for p in passages:
-                texts.append(p)
-                metadatas.append({
-                    "source": d["name"]
-                })
+            self._vectorstore.save_local(self.index_path)
 
-        self._vectorstore = FAISS.from_texts(
-            texts,
-            embedding=embeddings,
-            metadatas=metadatas
-        )
+            self._qa_chain = self._get_qa_chain(self._vectorstore)
 
-        self._vectorstore.save_local(self.index_path)
-        self._qa_chain = self._get_qa_chain(self._vectorstore)
+        except Exception:
+            print("\n🔥 VECTORSTORE ERROR 🔥")
+            traceback.print_exc()
 
+    # ---------- QA Chain ----------
     def _get_qa_chain(self, vectorstore):
+
         llm = Ollama(model="llama3:8b")
 
         template = """
-        {role}
+{role}
 
-        You are performing extractive question answering.
+Answer ONLY using the context below.
 
-        Rules:
-        - Answer ONLY from context
-        - If not found say "I don't know"
+Context:
+{context}
 
-        Context:
-        {context}
+Question:
+{question}
 
-        Question:
-        {question}
-
-        Answer:
-        """
+Answer:
+"""
 
         prompt = PromptTemplate(
             template=template,
-            input_variables=["context","question","role"]
+            input_variables=["context", "question", "role"]
         )
 
-        qa_chain = RetrievalQA.from_chain_type(
+        return RetrievalQA.from_chain_type(
             llm=llm,
             retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
             chain_type="stuff",
@@ -189,32 +209,52 @@ class DocumentQA:
             chain_type_kwargs={"prompt": prompt}
         )
 
-        return qa_chain
-
     # ---------- Answer ----------
-    def answer_question(self, question: str, top_k: int = 3, documents=None, role=None):
-        if not self._qa_chain:
-            return {"answer": "No documents indexed yet. Upload PDFs/XLSX first.", "sources": []}
+    def answer_question(self, question, top_k=3, documents=None, role=None):
 
-        # Update retriever's k dynamically
-        self._qa_chain.retriever.search_kwargs["k"] = top_k
+        try:
+            if not self._qa_chain:
+                return {
+                    "answer": "No documents indexed yet.",
+                    "sources": []
+                }
 
-        result = self._qa_chain({"query": question})
-        answer_text = result.get("result", "")
-        sources = [getattr(doc, "page_content", str(doc))[:200] for doc in result.get("source_documents", [])]
-        return {"answer": answer_text, "sources": sources}
+            self._qa_chain.retriever.search_kwargs["k"] = top_k
 
+            # ✅ Use default or custom role
+            final_role = role.strip() if role else self.default_role
 
+            result = self._qa_chain({
+                "query": question,
+                "role": final_role
+            })
 
-# ---------- Example Usage ----------
-if __name__ == "__main__":
-    docqa = DocumentQA()
+            docs = result.get("source_documents", [])
 
-    # Example: add a PDF
-    with open("financials.pdf", "rb") as f:
-        docqa.add_file("financials.pdf", f.read())
+            if documents:
+                docs = [
+                    d for d in docs
+                    if d.metadata.get("source") in documents
+                ]
 
-    # Ask question
-    res = docqa.answer_question("What is the revenue in 2023?")
-    print("Answer:", res["answer"])
-    print("Sources:", res["sources"])
+            sources = [
+                {
+                    "text": d.page_content[:200],
+                    "source": d.metadata.get("source")
+                }
+                for d in docs
+            ]
+
+            return {
+                "answer": result.get("result", ""),
+                "sources": sources
+            }
+
+        except Exception:
+            print("\n🔥 ERROR IN answer_question 🔥")
+            traceback.print_exc()
+
+            return {
+                "answer": "Internal error occurred",
+                "sources": []
+            }
