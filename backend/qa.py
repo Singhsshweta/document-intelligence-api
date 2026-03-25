@@ -128,15 +128,30 @@ class DocumentQA:
 
     # ---------- Vectorstore & QA chain ----------
     def _build_vectorstore(self):
-        if not self._passages:
+        if not self.docs:
             self._vectorstore = None
             self._qa_chain = None
             return
 
-        # Use local HuggingFace embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        self._vectorstore = FAISS.from_texts(self._passages, embedding=embeddings)
-        # Save index to disk
+
+        texts = []
+        metadatas = []
+
+        for d in self.docs:
+            passages = self._passages
+            for p in passages:
+                texts.append(p)
+                metadatas.append({
+                    "source": d["name"]
+                })
+
+        self._vectorstore = FAISS.from_texts(
+            texts,
+            embedding=embeddings,
+            metadatas=metadatas
+        )
+
         self._vectorstore.save_local(self.index_path)
         self._qa_chain = self._get_qa_chain(self._vectorstore)
 
@@ -144,29 +159,26 @@ class DocumentQA:
         llm = Ollama(model="llama3:8b")
 
         template = """
-        You are an AI assistant performing extractive question answering.
+        {role}
+
+        You are performing extractive question answering.
 
         Rules:
-        - The answer MUST be taken from the context.
-        - Matching should be case-insensitive.
-        - If the context contains a labeled field like:
-        "Organizing Institute: XYZ"
-        then the answer is the value after the colon.
-        - Do not explain.
-        - Return only the final answer.
-        - If not found, say: I don't know.
+        - Answer ONLY from context
+        - If not found say "I don't know"
 
         Context:
         {context}
 
-        Question: {question}
+        Question:
+        {question}
 
         Answer:
         """
 
         prompt = PromptTemplate(
             template=template,
-            input_variables=["context", "question"]
+            input_variables=["context","question","role"]
         )
 
         qa_chain = RetrievalQA.from_chain_type(
@@ -180,7 +192,7 @@ class DocumentQA:
         return qa_chain
 
     # ---------- Answer ----------
-    def answer_question(self, question: str, top_k: int = 3) -> Dict[str, Any]:
+    def answer_question(self, question: str, top_k: int = 3, documents=None, role=None):
         if not self._qa_chain:
             return {"answer": "No documents indexed yet. Upload PDFs/XLSX first.", "sources": []}
 

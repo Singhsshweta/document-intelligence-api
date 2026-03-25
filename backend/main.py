@@ -36,8 +36,10 @@ from backend.schemas import QuestionRequest, QuestionResponse
 def ask_question(request: QuestionRequest):
     try:
         result = qa_system.answer_question(
-            request.question,
-            top_k=request.top_k
+            question=request.question,
+            top_k=request.top_k,
+            documents=request.documents,
+            role=request.role
         )
         return result
     except Exception as e:
