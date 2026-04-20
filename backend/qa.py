@@ -11,7 +11,7 @@ from langchain_ollama import OllamaLLM
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter  # Fix #7
 
 
 class DocumentQA:
@@ -181,14 +181,39 @@ Answer:
     # QUERY CLASSIFICATION
     # -------------------------------
     def _classify_query(self, question: str) -> str:
-        """Fix #5: Only route to structured if structured data actually exists."""
+        q = question.lower().strip()
+
+        chitchat_patterns = [
+            "hello", "hi", "hey", "howdy", "good morning", "good afternoon",
+            "good evening", "how are you", "how r u", "what's up", "sup",
+            "who are you", "what are you", "what can you do",
+            "thank you", "thanks", "bye", "goodbye", "see you",
+            "ok", "okay", "great", "awesome", "nice", "cool",
+            "got it", "understood",
+        ]
+        if any(q == p or q.startswith(p) for p in chitchat_patterns):
+            return "chitchat"
+
         if self.structured_data:
-            q = question.lower()
             if any(k in q for k in ["total", "sum", "average", "mean", "max", "min"]):
                 return "structured"
             if any(k in q for k in ["compare", "difference", "vs"]):
                 return "comparison"
+
         return "rag"
+
+    # -------------------------------
+    # CHITCHAT HANDLER
+    # -------------------------------
+    def _handle_chitchat(self, question: str, role: str) -> Dict:
+        prompt = f"""{role}
+
+You are also a friendly assistant. The user said: "{question}"
+
+Reply naturally and conversationally in 1-2 sentences. Do not mention documents or context.
+"""
+        answer = self.llm.invoke(prompt)
+        return {"answer": answer, "sources": []}
 
     # -------------------------------
     # STRUCTURED DATA HANDLING
@@ -300,12 +325,15 @@ Generate 1-2 concise business insights.
                 }
 
             query_type = self._classify_query(question)
+            final_role = role.strip() if role else self.default_role
+
+            if query_type == "chitchat":
+                return self._handle_chitchat(question, final_role)
 
             if query_type == "structured":
                 return self._handle_dataframe_query(question)
 
             k = 5 if len(question) > 100 else top_k
-            final_role = role.strip() if role else self.default_role
 
             return self._rag_answer(question, documents, final_role, k)
 

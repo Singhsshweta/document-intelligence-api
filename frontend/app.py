@@ -13,8 +13,22 @@ doc_selection: dict[str, bool] = {}
 # -------------------------------
 ui.add_head_html("""
 <style>
-  body { background: #f4f4f2 !important; }
+  /* Force full viewport coverage with no scrollbars */
+  html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f4f4f2 !important; }
 
+  /* NiceGUI wraps everything in .q-page — make it fill height too */
+  .q-page, .q-page-container, .nicegui-content { height: 100% !important; }
+
+  /* Root app shell */
+  .app-shell {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  /* ---- SIDEBAR ---- */
   .sidebar {
     width: 260px;
     min-width: 260px;
@@ -23,16 +37,69 @@ ui.add_head_html("""
     border-right: 1px solid #e8e8e5;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
   }
 
+  .sidebar-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid #e8e8e5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-docs {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar-footer {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-top: 1px solid #e8e8e5;
+  }
+
+  /* ---- MAIN PANEL ---- */
   .main-panel {
     flex: 1;
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    min-width: 0;
   }
 
+  .main-header {
+    flex-shrink: 0;
+    background: #ffffff;
+    border-bottom: 1px solid #e8e8e5;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .role-bar {
+    flex-shrink: 0;
+    background: #f7f7f5;
+    border-bottom: 1px solid #e8e8e5;
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Chat fills all remaining space */
   .chat-scroll {
     flex: 1;
     overflow-y: auto;
@@ -40,8 +107,22 @@ ui.add_head_html("""
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-height: 0;
   }
 
+  .input-bar {
+    flex-shrink: 0;
+    background: #ffffff;
+    border-top: 1px solid #e8e8e5;
+    padding: 12px 24px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* ---- MESSAGES ---- */
   .msg-user {
     align-self: flex-end;
     max-width: 68%;
@@ -88,6 +169,7 @@ ui.add_head_html("""
     color: #888780;
   }
 
+  /* ---- SIDEBAR DOC ROWS ---- */
   .doc-row {
     display: flex;
     align-items: center;
@@ -108,65 +190,42 @@ ui.add_head_html("""
   }
 
   .nicegui-upload { width: 100% !important; }
-
-  .role-bar {
-    background: #f7f7f5;
-    border-bottom: 1px solid #e8e8e5;
-    padding: 8px 24px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .input-bar {
-    background: #ffffff;
-    border-top: 1px solid #e8e8e5;
-    padding: 12px 24px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
 </style>
 """)
 
 # -------------------------------
 # Layout
 # -------------------------------
-with ui.row().style("width: 100vw; height: 100vh; overflow: hidden; gap: 0;"):
+with ui.element("div").classes("app-shell"):
 
     # ===========================
     # SIDEBAR
     # ===========================
-    with ui.column().classes("sidebar").style("gap: 0;"):
+    with ui.element("div").classes("sidebar"):
 
-        with ui.row().style(
-            "padding: 16px 16px 12px; border-bottom: 1px solid #e8e8e5; "
-            "align-items: center; gap: 8px;"
-        ):
+        with ui.element("div").classes("sidebar-header"):
             ui.label("📂").style("font-size: 16px;")
             ui.label("Documents").style(
                 "font-size: 13px; font-weight: 500; color: #5f5e5a; "
                 "letter-spacing: 0.05em; text-transform: uppercase;"
             )
 
-        with ui.element("div").style("padding: 10px 12px;"):
+        with ui.element("div").style("padding: 10px 12px; flex-shrink: 0;"):
             ui.upload(
                 on_upload=lambda e: upload_file(e),
                 multiple=True,
                 auto_upload=True,
                 label="Upload PDF or Excel"
             ).classes("nicegui-upload").props(
-                "flat accept='.pdf,.xls,.xlsx' color=grey-7"
+                "flat accept='.pdf,.xls,.xlsx' color=grey-7 no-thumbnails"
             ).style(
                 "border: 1px dashed #d3d1c7; border-radius: 8px; "
                 "width: 100%; font-size: 12px; color: #888780;"
             )
 
-        docs_column = ui.column().style(
-            "flex: 1; overflow-y: auto; padding: 6px; gap: 2px;"
-        )
+        docs_column = ui.element("div").classes("sidebar-docs")
 
-        with ui.row().style("padding: 10px 12px; border-top: 1px solid #e8e8e5;"):
+        with ui.element("div").classes("sidebar-footer"):
             ui.button(
                 "Clear all documents",
                 on_click=lambda: clear_all_docs()
@@ -175,19 +234,16 @@ with ui.row().style("width: 100vw; height: 100vh; overflow: hidden; gap: 0;"):
     # ===========================
     # MAIN PANEL
     # ===========================
-    with ui.column().classes("main-panel").style("gap: 0;"):
+    with ui.element("div").classes("main-panel"):
 
-        with ui.row().style(
-            "background: #ffffff; border-bottom: 1px solid #e8e8e5; "
-            "padding: 14px 24px; align-items: center; gap: 12px;"
-        ):
+        with ui.element("div").classes("main-header"):
             with ui.element("div").style(
-                "width: 34px; height: 34px; border-radius: 8px; "
+                "width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; "
                 "background: #e8f0fe; display: flex; align-items: center; "
                 "justify-content: center; font-size: 17px;"
             ):
                 ui.label("🧠")
-            with ui.column().style("gap: 1px;"):
+            with ui.element("div").style("display: flex; flex-direction: column; gap: 1px;"):
                 ui.label("AI Financial Analyst").style(
                     "font-size: 15px; font-weight: 500; color: #1a1a18;"
                 )
@@ -195,7 +251,7 @@ with ui.row().style("width: 100vw; height: 100vh; overflow: hidden; gap: 0;"):
                     "font-size: 12px; color: #888780;"
                 )
 
-        with ui.row().classes("role-bar"):
+        with ui.element("div").classes("role-bar"):
             ui.label("Role").style(
                 "font-size: 11px; font-weight: 500; color: #888780; white-space: nowrap;"
             )
@@ -203,9 +259,9 @@ with ui.row().style("width: 100vw; height: 100vh; overflow: hidden; gap: 0;"):
                 value="You are a financial analyst providing concise, data-backed insights."
             ).props("dense outlined").style("flex: 1; font-size: 12px;")
 
-        chat_area = ui.column().classes("chat-scroll")
+        chat_area = ui.element("div").classes("chat-scroll")
 
-        with ui.row().classes("input-bar"):
+        with ui.element("div").classes("input-bar"):
             question_input = ui.input(
                 placeholder="Ask about your documents…"
             ).props("outlined dense").style("flex: 1;")
@@ -335,7 +391,7 @@ def clear_all_docs():
 # -------------------------------
 # Send question
 # -------------------------------
-def send_question():
+async def send_question():
     question = question_input.value.strip()
 
     if not question:
@@ -360,14 +416,13 @@ def send_question():
     question_input.set_value("")
 
     try:
-        response = requests.post(
-            f"{API_URL}/ask",
-            json={
-                "question": question,
-                "documents": selected,
-                "role": role_input.value.strip() or None,
-            },
-            timeout=60,
+        payload = {
+            "question": question,
+            "documents": selected,
+            "role": role_input.value.strip() or None,
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post(f"{API_URL}/ask", json=payload, timeout=60)
         )
 
         if response.status_code == 200:
@@ -387,7 +442,7 @@ def send_question():
     except Exception as ex:
         _add_msg_error(f"Could not reach the backend: {ex}")
 
-    chat_area.scroll_to_bottom()
+    
 
 
 # -------------------------------
