@@ -147,7 +147,7 @@ project/
 ## 1. Clone Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Singhsshweta/document-intelligence-api.git
 cd project
 ```
 
