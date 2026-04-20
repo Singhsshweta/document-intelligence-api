@@ -91,7 +91,7 @@ ollama run llama3:8b
 
 ### 4. Run backend
 
-uvicorn main:app --reload
+uvicorn backend.main:app --reload 
 
 ### 5. Run frontend
 
