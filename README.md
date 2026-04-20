@@ -1,281 +1,215 @@
-# 🧠 AI Document Analyst (RAG + Structured Data)
+# 🧠 AI Document Intelligence System (RAG + Structured Reasoning)
 
-An AI-powered system that allows users to upload documents (PDF/Excel) and ask questions using a hybrid approach combining:
+An end-to-end AI system that analyzes documents using a **hybrid approach combining Retrieval-Augmented Generation (RAG) and structured data reasoning**.
 
-* 📄 Retrieval-Augmented Generation (RAG)
-* 📊 Structured data analysis (Excel)
-
-This project demonstrates how to build a **full-stack AI application** with document understanding and intelligent querying.
+Unlike basic RAG apps, this system intelligently routes queries to the most appropriate pipeline — enabling both **contextual understanding** and **numerical analysis**.
 
 ---
 
-# 🚀 Features
+## 🚀 Key Features
 
-## 📂 Document Management
+### 📂 Document Processing
 
-* Upload **PDF** and **Excel (.xls/.xlsx)** files
-* Select specific documents for querying
-* Delete individual documents
-* Clear all documents
-
-## 🤖 Intelligent Query Handling
-
-### 1. RAG-based QA (Unstructured Data)
-
-* Ask questions about uploaded PDFs
-* Uses embeddings + vector search (FAISS)
-
-### 2. Structured Data Analysis (Excel)
-
-Supports basic operations:
-
-* Sum / Total
-* Average / Mean
-* Max / Min
-
-### 3. Query Classification
-
-Automatically detects query type:
-
-* 💬 Chitchat (e.g., "hello")
-* 📊 Structured (Excel calculations)
-* 📄 RAG (document-based questions)
+* Upload PDF and Excel (.xls/.xlsx) files
+* Automatic text extraction and chunking
+* Vector indexing using FAISS
 
 ---
 
-## 🧾 Source Attribution
+### 🧠 Intelligent Query Routing
 
-* Shows which document(s) were used to generate answers
+Automatically classifies user queries into:
+
+* 📊 **Structured Queries** → handled using Pandas (Excel analysis)
+* 📄 **Unstructured Queries** → handled using RAG (LLM + FAISS)
+* 💬 **General Queries** → handled directly by LLM
 
 ---
 
-## 🎭 Custom Role Prompting
+### 🔗 Hybrid AI Architecture
 
-* Users can define assistant behavior via prompt
-* Example:
+#### 1. RAG Pipeline (Unstructured Data)
+
+* Embedding generation using Sentence Transformers
+* Semantic search using FAISS
+* Context-aware answer generation via LLM
+
+#### 2. Structured Data Engine
+
+* Direct DataFrame operations:
+
+  * Sum / Total
+  * Average / Mean
+  * Max / Min
+* Ensures accurate numerical results (no hallucination)
+
+---
+
+### 📊 Insight Generation
+
+* Converts raw outputs into **business insights** using LLM
+* Bridges gap between data → decision-making
+
+---
+
+### 📚 Source Attribution
+
+* Displays document sources used in answers
+* Improves transparency and trust
+
+---
+
+### 🎭 Role-Based Responses
+
+* Custom system prompts:
 
   * “You are a financial analyst”
   * “Explain like a teacher”
 
 ---
 
-## 💬 Chat Interface
+## 🏗️ System Architecture
 
-* Chat-style UI
-* User & AI messages
-* Error handling
-* Source indicators
-
----
-
-# 🏗️ Project Structure
-
-```bash
-project/
-│
-├── backend/
-│   ├── main.py        # FastAPI API
-│   ├── qa.py          # Core AI logic
-│   ├── schemas.py     # Request/response models
-│
-├── frontend/
-│   ├── app.py         # NiceGUI UI
-│
-└── README.md
+```
+User Query
+     ↓
+Query Classifier (Rule + LLM)
+     ↓
+-------------------------------
+| Structured | RAG | General |
+-------------------------------
+     ↓            ↓
+ Pandas        FAISS + LLM
+     ↓            ↓
+     -------- Merge --------
+               ↓
+      Insight Generation (LLM)
+               ↓
+            Response
 ```
 
 ---
 
-# ⚙️ Tech Stack
+## ⚙️ Tech Stack
 
-## Backend
+**Backend**
 
 * FastAPI
 * LangChain
-* FAISS (vector store)
-* HuggingFace Embeddings (`all-MiniLM-L6-v2`)
-* Ollama (`llama3:8b`)
-* Pandas (Excel processing)
-* PyPDF2 (PDF parsing)
+* FAISS
+* Sentence Transformers
+* Ollama (LLaMA3)
 
-## Frontend
+**Data Processing**
+
+* Pandas
+* PyPDF2
+
+**Frontend**
 
 * NiceGUI
-* Async requests
 
 ---
 
-# 🔄 System Workflow
+## 🔄 Workflow
 
-1. Upload a document (PDF or Excel)
-2. Backend:
+1. Upload documents (PDF/Excel)
+2. System:
 
    * Extracts text
-   * Splits into chunks
-   * Stores embeddings in FAISS
-3. Ask a question
-4. System classifies query:
+   * Builds vector index
+   * Stores structured data
+3. User asks a query
+4. Query is classified and routed:
 
-   * Chitchat → LLM response
-   * Structured → Pandas operations
-   * RAG → Retrieval + LLM
-5. Returns answer + sources
+   * Structured → Pandas
+   * RAG → FAISS + LLM
+5. System returns:
 
----
-
-# 🧪 Example Queries
-
-### 📊 Excel Queries
-
-* "What is the total of column X?"
-* "Give me the average sales"
-
-### 📄 Document Queries
-
-* "Summarize this document"
-* "What are the key points?"
-
-### 💬 Chitchat
-
-* "Hello"
-* "What can you do?"
+   * Answer
+   * Sources
+   * Business insight
 
 ---
 
-# ⚡ Setup Instructions
+## 🧪 Example Queries
 
-## 1. Clone Repository
+### 📊 Structured
+
+* “What is the total revenue?”
+* “Give average sales by region”
+
+### 📄 RAG
+
+* “Summarize this document”
+* “What are the key insights?”
+
+### 💬 General
+
+* “What can you do?”
+
+---
+
+## ⚡ Setup
 
 ```bash
 git clone https://github.com/Singhsshweta/document-intelligence-api.git
-cd project
-```
+cd document-intelligence-api
 
----
-
-## 2. Create Virtual Environment
-
-```bash
 python -m venv venv
+venv\Scripts\activate   # Windows
+
+pip install -r requirements.txt
 ```
 
-### Activate
-
-**Windows**
+### Run Ollama
 
 ```bash
-venv\Scripts\activate
+ollama run llama3:8b
 ```
 
-**Mac/Linux**
+### Run Backend
 
 ```bash
-source venv/bin/activate
+uvicorn backend.main:app --reload
+```
+
+### Run Frontend
+
+```bash
+python frontend/app.py
 ```
 
 ---
 
-## 3. Install Dependencies
+## ⚠️ Limitations
 
-```bash
-pip install fastapi uvicorn nicegui requests pandas PyPDF2 \
-langchain langchain-community langchain-core \
-langchain-huggingface langchain-ollama \
-faiss-cpu
-```
-
----
-
-## 4. Install & Run Ollama
-
-Download:
-👉 https://ollama.com
-
-Then:
-
-```bash
-ollama pull llama3:8b
-ollama serve
-```
-
----
-
-## 5. Run Backend
-
-```bash
-cd backend
-uvicorn main:app --reload
-```
-
-Backend runs at:
-
-```
-http://127.0.0.1:8000
-```
-
----
-
-## 6. Run Frontend
-
-Open new terminal:
-
-```bash
-cd frontend
-python app.py
-```
-
-Frontend runs at:
-
-```
-http://127.0.0.1:8080
-```
-
----
-
-# 🖥️ Usage
-
-1. Open frontend in browser
-2. Upload documents
-3. Select documents in sidebar
-4. Ask questions
-5. View answers with sources
-
----
-
-# ⚠️ Current Limitations
-
-* No persistent storage (data resets on restart)
+* No persistent storage
+* Basic structured query support
 * Single-user system
-* No authentication
-* Limited Excel query support
-* No streaming responses
 
 ---
 
-# 🚀 Future Improvements
+## 🚀 Future Work
 
-* Financial-specific analysis
-* Multi-user support
+* Advanced financial analytics
+* Chart & report generation
 * Persistent vector database
-* Streaming responses
-* Advanced table querying via LLM
-* UI improvements (document preview, highlights)
+* Multi-document comparison
 
 ---
 
-# 📌 Note
+## 👩‍💻 Author
 
-Although the UI mentions "Financial Analyst",
-this version is a **general-purpose document QA system**.
+Shweta Singh
+GitHub: https://github.com/Singhsshweta
+
+---
+
+## 💡 Key Takeaway
+
+This project demonstrates how to design a **hybrid AI system that combines symbolic computation (Pandas) with neural retrieval (RAG)** to produce accurate and actionable results.
 
 ---
 
-# 👨‍💻 Summary
-
-This project demonstrates:
-
-* RAG pipeline implementation
-* Hybrid AI (unstructured + structured)
-* Full-stack AI application design
-
----
+⭐ If you find this useful, consider starring the repo!
